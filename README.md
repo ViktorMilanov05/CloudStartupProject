@@ -1,4 +1,4 @@
-# Planify — Task & Process Management Application
+# Planify - Task & Process Management Application
 
 ## Overview
 
@@ -28,7 +28,7 @@ Planify is a task and process management application built for companies that ne
 
 ### Task Management
 - Kanban board with 4 columns: To Do, In Progress, Done, Blocked
-- Create tasks from scratch or from a template (snapshot — steps copied, editable per task)
+- Create tasks from scratch or from a template (snapshot - steps copied, editable per task)
 - Multi-assignee support (many-to-many)
 - Enforced status transitions: ToDo ↔ InProgress ↔ Done, ToDo/InProgress ↔ Blocked
 - Step completion tracking with progress bar
@@ -443,11 +443,11 @@ WantedBy=multi-user.target
 | IsRead | BIT | |
 
 ### Key Indexes
-- `User.Email` — unique
-- `TaskAssignees(TaskItemId, UserId)` — composite PK
-- `Task.Status`, `Task.DueDate` — for filtering/overdue queries
+- `User.Email` - unique
+- `TaskAssignees(TaskItemId, UserId)` - composite PK
+- `Task.Status`, `Task.DueDate` - for filtering/overdue queries
 - `TaskStep.TaskId + SortOrder`, `TemplateStep.TemplateId + SortOrder`
-- `Notification(UserId, IsRead, CreatedAt)` — for efficient queries
+- `Notification(UserId, IsRead, CreatedAt)` - for efficient queries
 
 ---
 
@@ -488,7 +488,7 @@ Logs are written to `Logs/log-{date}.txt` in the API directory.
 
 | Decision | Rationale |
 |---|---|
-| Monolith | One team, one deployment — microservices overkill for MVP |
+| Monolith | One team, one deployment - microservices overkill for MVP |
 | Clean Architecture (lightweight) | API → Application → Infrastructure. No full DDD/CQRS needed |
 | Single-tenant per deployment | Simplest on-prem model; no cross-tenant data leakage by design |
 | Stateless API (JWT) | No server-side sessions; cloud-migration friendly |
@@ -500,13 +500,13 @@ Logs are written to `Logs/log-{date}.txt` in the API directory.
 
 ## Future Roadmap (v2)
 
-1. **Audit log** — Track all changes with before/after values
-2. **Task dependencies** — "Task B cannot start until Task A is Done"
-3. **Recurring tasks** — Create tasks on a schedule from a template (Hangfire)
-4. **Reporting** — Completion rates, resolution time, overdue trends
-5. **Full-text search** — Across tasks, comments, templates
-6. **Activity feed** — Timeline of recent actions across the company
-7. **Email notifications** — Optional email delivery via SMTP/SendGrid
-8. **Notification cleanup** — 30-day retention background job
-9. **Docker containerization** — Dockerfile for simplified deployment
-10. **Cloud migration** — Swap file storage to Azure Blob, DB to Azure SQL (zero business logic changes)
+1. **Audit log** - Track all changes with before/after values
+2. **Task dependencies** - "Task B cannot start until Task A is Done"
+3. **Recurring tasks** - Create tasks on a schedule from a template (Hangfire)
+4. **Reporting** - Completion rates, resolution time, overdue trends
+5. **Full-text search** - Across tasks, comments, templates
+6. **Activity feed** - Timeline of recent actions across the company
+7. **Email notifications** - Optional email delivery via SMTP/SendGrid
+8. **Notification cleanup** - 30-day retention background job
+9. **Docker containerization** - Dockerfile for simplified deployment
+10. **Cloud migration** - Swap file storage to Azure Blob, DB to Azure SQL (zero business logic changes)
