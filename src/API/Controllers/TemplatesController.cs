@@ -9,7 +9,7 @@ namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin,Manager")]
+[Authorize]
 public class TemplatesController : ControllerBase
 {
     private readonly ITemplateService _templateService;
@@ -36,7 +36,6 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = "Admin,Manager,User")]
     public async Task<IActionResult> GetAll([FromQuery] bool? isActive, CancellationToken cancellationToken)
     {
         var templates = await _templateService.GetAllAsync(isActive, cancellationToken);
@@ -44,7 +43,6 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Admin,Manager,User")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var template = await _templateService.GetByIdAsync(id, cancellationToken);
@@ -55,6 +53,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Create([FromBody] CreateTemplateRequest request, CancellationToken cancellationToken)
     {
         var validation = await _createValidator.ValidateAsync(request, cancellationToken);
@@ -67,6 +66,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTemplateRequest request, CancellationToken cancellationToken)
     {
         var validation = await _updateValidator.ValidateAsync(request, cancellationToken);
@@ -78,6 +78,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         await _templateService.DeleteAsync(id, cancellationToken);
@@ -85,6 +86,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpPost("{id:guid}/steps")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> AddStep(Guid id, [FromBody] CreateTemplateStepRequest request, CancellationToken cancellationToken)
     {
         var validation = await _createStepValidator.ValidateAsync(request, cancellationToken);
@@ -96,6 +98,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/steps/{stepId:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> UpdateStep(Guid id, Guid stepId, [FromBody] UpdateTemplateStepRequest request, CancellationToken cancellationToken)
     {
         var validation = await _updateStepValidator.ValidateAsync(request, cancellationToken);
@@ -107,6 +110,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}/steps/{stepId:guid}")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> DeleteStep(Guid id, Guid stepId, CancellationToken cancellationToken)
     {
         await _templateService.DeleteStepAsync(id, stepId, cancellationToken);
@@ -114,6 +118,7 @@ public class TemplatesController : ControllerBase
     }
 
     [HttpPut("{id:guid}/steps/reorder")]
+    [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> ReorderSteps(Guid id, [FromBody] ReorderStepsRequest request, CancellationToken cancellationToken)
     {
         var validation = await _reorderValidator.ValidateAsync(request, cancellationToken);

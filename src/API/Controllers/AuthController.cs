@@ -34,10 +34,16 @@ public class AuthController : ControllerBase
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
         }
 
-        var result = await _authService.LoginAsync(request, cancellationToken);
-        SetRefreshTokenCookie(result.RefreshToken);
-
-        return Ok(result);
+        try
+        {
+            var result = await _authService.LoginAsync(request, cancellationToken);
+            SetRefreshTokenCookie(result.RefreshToken);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { detail = ex.Message });
+        }
     }
 
     [HttpPost("refresh")]
@@ -71,12 +77,13 @@ public class AuthController : ControllerBase
     private void SetRefreshTokenCookie(string refreshToken)
     {
         var refreshTokenDays = int.Parse(_configuration["Jwt:RefreshTokenExpirationDays"] ?? "7");
+        var isHttps = Request.Scheme == "https";
 
         Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
+            Secure = isHttps,
+            SameSite = isHttps ? SameSiteMode.Strict : SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays)
         });
     }

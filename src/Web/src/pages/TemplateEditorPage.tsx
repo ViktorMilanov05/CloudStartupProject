@@ -208,10 +208,9 @@ export default function TemplateEditorPage() {
   // Create template mutation
   const createMutation = useMutation({
     mutationFn: (data: CreateTemplateRequest) => templatesApi.create(data),
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      setSuccessMsg('Template created successfully');
-      navigate(`/templates/${response.data.id}/edit`, { replace: true });
+      navigate('/templates');
     },
     onError: (err: any) => {
       setError(err.response?.data?.errors?.join(', ') || err.response?.data?.detail || 'Failed to create template');
@@ -280,7 +279,7 @@ export default function TemplateEditorPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       queryClient.invalidateQueries({ queryKey: ['template', id] });
-      setSuccessMsg('Template saved successfully');
+      //setSuccessMsg('Template saved successfully');
     },
     onError: (err: any) => {
       setError(err.response?.data?.errors?.join(', ') || err.response?.data?.detail || 'Failed to save steps');
@@ -305,6 +304,7 @@ export default function TemplateEditorPage() {
     if (isEditMode) {
       await updateMutation.mutateAsync();
       await saveStepsMutation.mutateAsync();
+      navigate('/templates')
     } else {
       createMutation.mutate({
         name: name.trim(),

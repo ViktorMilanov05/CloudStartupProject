@@ -132,9 +132,7 @@ export default function TemplatesPage() {
                   key={template.id}
                   hover
                   sx={{ cursor: 'pointer' }}
-                  onClick={() => {
-                    if (canManage) navigate(`/templates/${template.id}/edit`);
-                  }}
+                  onClick={() => navigate(`/template/${template.id}`)}
                 >
                   <TableCell>
                     <Typography fontWeight={500}>{template.name}</Typography>

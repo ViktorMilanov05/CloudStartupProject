@@ -51,6 +51,7 @@ public class FilesController : ControllerBase
     }
 
     [HttpGet("images/{fileName}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetImage(string fileName, CancellationToken cancellationToken)
     {
         var sanitizedFileName = Path.GetFileName(fileName);
@@ -145,6 +146,7 @@ public class FilesController : ControllerBase
         var role = User.FindFirstValue(ClaimTypes.Role)
             ?? throw new UnauthorizedAccessException("Role claim not found.");
 
-        return (Guid.Parse(userIdStr), Guid.Parse(companyIdStr), role);
+        var companyId = string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);
+        return (Guid.Parse(userIdStr), companyId, role);
     }
 }

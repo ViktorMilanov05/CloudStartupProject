@@ -6,12 +6,14 @@ import SetupPage from './pages/SetupPage';
 import TasksPage from './pages/TasksPage';
 import TaskDetailPage from './pages/TaskDetailPage';
 import TemplatesPage from './pages/TemplatesPage';
+import TemplateViewPage from './pages/TemplateViewPage';
 import TemplateEditorPage from './pages/TemplateEditorPage';
 import UsersPage from './pages/UsersPage';
 import CompaniesPage from './pages/CompaniesPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AppLayout from './components/AppLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import RoleRedirect from './components/RoleRedirect';
 import { SetupRoute, LoginGuard } from './components/SetupGuard';
 
 const queryClient = new QueryClient({
@@ -60,11 +62,12 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<TasksPage />} />
+              <Route path="/" element={<RoleRedirect />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/template/:id" element={<TemplateViewPage/>} />
               <Route
                 path="/templates/new"
                 element={

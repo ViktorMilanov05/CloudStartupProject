@@ -43,8 +43,6 @@ export const filesApi = {
   uploadImage: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return client.post<{ url: string }>('/files/upload-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return client.postForm<{ url: string }>('/files/upload-image', formData);
   },
 };

@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.IO.Compression;
 using System.Threading.RateLimiting;
@@ -18,6 +19,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -203,6 +206,40 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+// Auto-migrate database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var dbCreator = db.Database.GetService<IRelationalDatabaseCreator>();
+    if(!await dbCreator.ExistsAsync())
+    {
+        await dbCreator.CreateAsync();
+    }
+    var connectionString = db.Database.GetConnectionString();
+    await using var lockConnection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
+    await lockConnection.OpenAsync();
+    await using var transaction = lockConnection.BeginTransaction();
+    await using var lockCommand = lockConnection.CreateCommand();
+    lockCommand.CommandText = "EXEC @result = sp_getapplock @Resource = 'DbMigration', @LockMode = 'Exclusive', @LockTimeout = 60000; SELECT @result;";
+    lockCommand.Transaction = transaction;
+    var resultParam = lockCommand.CreateParameter();
+    resultParam.ParameterName = "@result";
+    resultParam.DbType = System.Data.DbType.Int32;
+    resultParam.Direction = System.Data.ParameterDirection.Output;
+    lockCommand.Parameters.Add(resultParam);
+    var lockResult = (int)(await lockCommand.ExecuteScalarAsync())!;
+    if (lockResult >= 0)
+    {
+        db.Database.Migrate();
+        Log.Information("Database migration completed successfully.");
+        transaction.Commit();
+    }
+    else
+    {
+        Log.Warning("Could not acquire lock for database migration. Another instance may be migrating the database. Lock result: {LockResult}", lockResult);
+    }
+}
+
 // ── Middleware Pipeline ──────────────────────────────────────────────────────
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseSerilogRequestLogging();
@@ -230,9 +267,9 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseCors("AllowFrontend");
 app.UseRateLimiter();

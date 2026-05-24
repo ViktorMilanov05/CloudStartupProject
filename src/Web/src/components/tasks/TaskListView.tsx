@@ -120,7 +120,7 @@ export default function TaskListView({ tasks, onTaskClick, sortBy, sortDescendin
                       {new Date(task.dueDate).toLocaleDateString()}
                     </Typography>
                   ) : (
-                    <Typography variant="body2" color="text.secondary">—</Typography>
+                    <Typography variant="body2" color="text.secondary">-</Typography>
                   )}
                 </TableCell>
                 <TableCell>
@@ -135,7 +135,7 @@ export default function TaskListView({ tasks, onTaskClick, sortBy, sortDescendin
                       <LinearProgress variant="determinate" value={progress} sx={{ height: 4, borderRadius: 2 }} />
                     </Box>
                   ) : (
-                    <Typography variant="caption" color="text.secondary">—</Typography>
+                    <Typography variant="caption" color="text.secondary">-</Typography>
                   )}
                 </TableCell>
               </TableRow>

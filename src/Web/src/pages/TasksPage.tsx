@@ -44,7 +44,7 @@ export default function TasksPage() {
     pageSize: 200, // Load more for board view
   });
 
-  // Debounce search input — only update filters after 300ms of no typing
+  // Debounce search input - only update filters after 300ms of no typing
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     debounceRef.current = setTimeout(() => {

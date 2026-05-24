@@ -9,7 +9,7 @@ namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Manager,User")]
+[Authorize(Roles = "Admin,Manager,User")]
 public class TasksController : ControllerBase
 {
     private readonly ITaskService _taskService;
@@ -218,6 +218,7 @@ public class TasksController : ControllerBase
         var role = User.FindFirstValue(ClaimTypes.Role)
             ?? throw new UnauthorizedAccessException("Role claim not found.");
 
-        return (Guid.Parse(userIdStr), Guid.Parse(companyIdStr), role);
+        var companyId = string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);
+        return (Guid.Parse(userIdStr), companyId, role);
     }
 }
