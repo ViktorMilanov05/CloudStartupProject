@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { useAuthStore } from '../stores/authStore';
 
 describe('authStore', () => {

@@ -21,7 +21,7 @@ import { useAuthStore } from '../../stores/authStore';
 import RichTextEditor from '../RichTextEditor';
 import TaskAttachmentList from './TaskAttachmentList';
 import ConfirmDialog from '../common/ConfirmDialog';
-import type { TaskComment, TaskAttachment } from '../../types/task';
+import type { TaskComment } from '../../types/task';
 
 interface TaskCommentsProps {
   taskId: string;

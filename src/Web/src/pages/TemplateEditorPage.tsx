@@ -12,7 +12,6 @@ import {
   Snackbar,
   IconButton,
   Tooltip,
-  Divider,
   Collapse,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -42,8 +41,6 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { templatesApi } from '../api/templates';
 import type {
-  TemplateDetail,
-  TemplateStep,
   CreateTemplateRequest,
 } from '../types/template';
 import RichTextEditor from '../components/RichTextEditor';

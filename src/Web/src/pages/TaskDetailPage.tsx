@@ -19,10 +19,8 @@ import {
   Link,
   LinearProgress,
   Avatar,
-  AvatarGroup,
   Tooltip,
 } from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -331,11 +329,11 @@ export default function TaskDetailPage() {
                 {isManager && (
                   <FormControl size="small">
                     <InputLabel>Assignees</InputLabel>
-                    <Select
+                    <Select<string[]>
                       multiple
                       value={editAssigneeIds}
                       label="Assignees"
-                      onChange={(e: SelectChangeEvent<string[]>) => setEditAssigneeIds(e.target.value as string[])}
+                      onChange={(e) => setEditAssigneeIds(e.target.value as string[])}
                       renderValue={(selected) => {
                         const names = users.filter(u => selected.includes(u.id)).map(u => `${u.firstName} ${u.lastName}`);
                         return names.join(', ');

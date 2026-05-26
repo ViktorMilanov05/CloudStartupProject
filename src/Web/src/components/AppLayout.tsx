@@ -15,7 +15,6 @@ import {
   Divider,
   Menu,
   MenuItem,
-  Avatar,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import TaskIcon from '@mui/icons-material/Task';
