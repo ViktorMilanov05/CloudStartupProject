@@ -45,7 +45,7 @@ public class FilesController : ControllerBase
         using var stream = file.OpenReadStream();
         var (storedPath, storedFileName) = await _fileStorageService.SaveImageAsync(file.FileName, stream, cancellationToken);
 
-        var imageUrl = $"/api/files/images/{storedFileName}";
+        var imageUrl = $"{Request.Scheme}://{Request.Host}/api/files/images/{storedFileName}";
 
         return Ok(new { url = imageUrl });
     }
