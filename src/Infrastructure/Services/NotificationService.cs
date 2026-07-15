@@ -80,6 +80,14 @@ public class NotificationService : INotificationService
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    public async Task<int> DeleteOlderThanAsync(int days, CancellationToken cancellationToken = default)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-days);
+        return await _dbContext.Notifications
+            .Where(n => n.CreatedAt <= cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     public async Task NotifyAsync(
         NotificationType type,
         Guid actorId,

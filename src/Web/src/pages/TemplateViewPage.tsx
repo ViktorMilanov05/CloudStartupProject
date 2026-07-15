@@ -104,7 +104,7 @@ export default function TemplateViewPage() {
             <Paper key={step.id} variant="outlined" sx={{ mb: 1.5 }}>
               <Box sx={{ px: 2, py: 1.5, bgcolor: 'grey.50', borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Typography variant="subtitle2">
-                  #{index + 1} - {step.title}
+                  #{index + 1} — {step.title}
                 </Typography>
               </Box>
               {step.instructions && (

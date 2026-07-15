@@ -15,15 +15,18 @@ public class AdminController : ControllerBase
 {
     private readonly ICompanyService _companyService;
     private readonly IUserService _userService;
+    private readonly INotificationService _notificationService;
     private readonly IValidator<CreateCompanyRequest> _companyValidator;
 
     public AdminController(
         ICompanyService companyService,
         IUserService userService,
+        INotificationService notificationService,
         IValidator<CreateCompanyRequest> companyValidator)
     {
         _companyService = companyService;
         _userService = userService;
+        _notificationService = notificationService;
         _companyValidator = companyValidator;
     }
 
@@ -76,5 +79,17 @@ public class AdminController : ControllerBase
 
         var user = await _userService.UpdateUserAsync(userId, null, request, cancellationToken);
         return Ok(user);
+    }
+
+    [HttpPost("maintenance/cleanup-notifications")]
+    public async Task<IActionResult> CleanupNotifications([FromQuery] int olderThanDays = 30, CancellationToken cancellationToken = default)
+    {
+        if (olderThanDays < 0)
+        {
+            return BadRequest(new { errors = new[] { "olderThanDays must be 0 or greater." } });
+        }
+
+        var deleted = await _notificationService.DeleteOlderThanAsync(olderThanDays, cancellationToken);
+        return Ok(new { deleted });
     }
 }

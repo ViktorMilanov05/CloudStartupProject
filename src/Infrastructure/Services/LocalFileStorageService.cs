@@ -16,63 +16,79 @@ public class LocalFileStorageService : IFileStorageService
 
     public async Task<string> SaveFileAsync(Guid taskId, string fileName, Stream fileStream, CancellationToken cancellationToken = default)
     {
-        var taskDir = Path.Combine(_basePath, taskId.ToString());
-        Directory.CreateDirectory(taskDir);
+        var relativeDir = taskId.ToString();
+        Directory.CreateDirectory(Path.Combine(_basePath, relativeDir));
 
         var sanitizedName = Path.GetFileName(fileName);
         var storedFileName = $"{Guid.NewGuid()}_{sanitizedName}";
-        var filePath = Path.Combine(taskDir, storedFileName);
+        var relativePath = Path.Combine(relativeDir, storedFileName);
+        var fullPath = ResolveAndValidate(relativePath);
 
-        ValidatePathWithinBase(filePath);
-
-        using var output = new FileStream(filePath, FileMode.Create);
+        using var output = new FileStream(fullPath, FileMode.Create);
         await fileStream.CopyToAsync(output, cancellationToken);
 
-        return filePath;
+        return relativePath;
     }
 
     public async Task<(string storedPath, string fileName)> SaveImageAsync(string fileName, Stream fileStream, CancellationToken cancellationToken = default)
     {
-        var imagesDir = Path.Combine(_basePath, "images");
-        Directory.CreateDirectory(imagesDir);
+        const string relativeDir = "images";
+        Directory.CreateDirectory(Path.Combine(_basePath, relativeDir));
 
         var sanitizedName = Path.GetFileName(fileName);
         var storedFileName = $"{Guid.NewGuid()}_{sanitizedName}";
-        var filePath = Path.Combine(imagesDir, storedFileName);
+        var relativePath = Path.Combine(relativeDir, storedFileName);
+        var fullPath = ResolveAndValidate(relativePath);
 
-        ValidatePathWithinBase(filePath);
-
-        using var output = new FileStream(filePath, FileMode.Create);
+        using var output = new FileStream(fullPath, FileMode.Create);
         await fileStream.CopyToAsync(output, cancellationToken);
 
-        return (filePath, storedFileName);
+        return (relativePath, storedFileName);
     }
 
     public Task<Stream> GetFileAsync(string storedPath, CancellationToken cancellationToken = default)
     {
-        ValidatePathWithinBase(storedPath);
+        var fullPath = ResolveAndValidate(storedPath);
 
-        if (!File.Exists(storedPath))
-            throw new FileNotFoundException("File not found.", storedPath);
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException("File not found.", fullPath);
 
-        Stream stream = new FileStream(storedPath, FileMode.Open, FileAccess.Read);
+        Stream stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
         return Task.FromResult(stream);
     }
 
     public Task DeleteFileAsync(string storedPath, CancellationToken cancellationToken = default)
     {
-        ValidatePathWithinBase(storedPath);
+        var fullPath = ResolveAndValidate(storedPath);
 
-        if (File.Exists(storedPath))
-            File.Delete(storedPath);
+        if (File.Exists(fullPath))
+            File.Delete(fullPath);
 
         return Task.CompletedTask;
     }
 
-    private void ValidatePathWithinBase(string path)
+    /// <summary>
+    /// Resolves a stored path to a full path, then verifies it stays within the
+    /// configured storage root. Accepts both new relative paths (relative to the
+    /// base path) and legacy absolute paths written by older versions.
+    /// </summary>
+    private string ResolveAndValidate(string storedPath)
     {
-        var fullPath = Path.GetFullPath(path);
-        if (!fullPath.StartsWith(_basePath, StringComparison.OrdinalIgnoreCase))
+        var fullPath = Path.GetFullPath(
+            Path.IsPathRooted(storedPath)
+                ? storedPath
+                : Path.Combine(_basePath, storedPath));
+
+        // Ensure the resolved path stays within the storage root. Comparing against
+        // the root with a trailing separator prevents a sibling directory whose name
+        // merely shares the root as a prefix (e.g. "Uploads_evil") from passing.
+        var rootWithSeparator = _basePath.EndsWith(Path.DirectorySeparatorChar)
+            ? _basePath
+            : _basePath + Path.DirectorySeparatorChar;
+
+        if (!fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("Access to the specified path is denied.");
+
+        return fullPath;
     }
 }

@@ -1,5 +1,6 @@
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,12 +11,16 @@ public class TokenCleanupService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TokenCleanupService> _logger;
-    private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
+    private readonly TimeSpan _interval;
 
-    public TokenCleanupService(IServiceScopeFactory scopeFactory, ILogger<TokenCleanupService> logger)
+    public TokenCleanupService(
+        IServiceScopeFactory scopeFactory,
+        ILogger<TokenCleanupService> logger,
+        IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _interval = TimeSpan.FromHours(configuration.GetValue<double?>("Cleanup:IntervalHours") ?? 24);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -31,7 +36,7 @@ public class TokenCleanupService : BackgroundService
                 _logger.LogError(ex, "Error during refresh token cleanup");
             }
 
-            await Task.Delay(Interval, stoppingToken);
+            await Task.Delay(_interval, stoppingToken);
         }
     }
 

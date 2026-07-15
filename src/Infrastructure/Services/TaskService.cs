@@ -45,8 +45,12 @@ public class TaskService : ITaskService
             .Include(t => t.Steps)
             .AsQueryable();
 
-        // Visibility: Manager sees all company tasks, User sees only assigned
-        if (userRole == "Manager")
+        // Visibility: Admin sees all tasks, Manager sees all company tasks, User sees only assigned
+        if (userRole == "Admin")
+        {
+            // No additional filter — admins oversee tasks across all companies.
+        }
+        else if (userRole == "Manager")
             query = query.Where(t => t.Assignees.Any(a => a.CompanyId == companyId) || t.CreatedBy.CompanyId == companyId);
         else
             query = query.Where(t => t.Assignees.Any(a => a.Id == userId));
@@ -179,7 +183,8 @@ public class TaskService : ITaskService
         var template = await _dbContext.Templates
             .AsNoTracking()
             .Include(t => t.Steps.OrderBy(s => s.SortOrder))
-            .FirstOrDefaultAsync(t => t.Id == templateId && t.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == templateId && t.IsActive
+                && (userRole == "Admin" || t.CompanyId == companyId), cancellationToken);
 
         if (template is null)
             throw new KeyNotFoundException("Template not found or is inactive.");
@@ -835,6 +840,9 @@ public class TaskService : ITaskService
 
     private static bool HasAccess(TaskItem task, Guid userId, Guid companyId, string userRole)
     {
+        if (userRole == "Admin")
+            return true;
+
         if (userRole == "Manager")
             return task.Assignees.Any(a => a.CompanyId == companyId) || task.CreatedById == userId;
 

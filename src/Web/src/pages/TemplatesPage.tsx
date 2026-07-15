@@ -132,7 +132,7 @@ export default function TemplatesPage() {
                   key={template.id}
                   hover
                   sx={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/template/${template.id}`)}
+                  onClick={() => navigate(`/templates/${template.id}`)}
                 >
                   <TableCell>
                     <Typography fontWeight={500}>{template.name}</Typography>

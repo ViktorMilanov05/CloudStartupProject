@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,15 @@ public class NotificationsController : ControllerBase
         _notificationService = notificationService;
     }
 
-    private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+    private Guid UserId
+    {
+        get
+        {
+            var userIdStr = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+                ?? throw new UnauthorizedAccessException("User ID claim not found.");
+            return Guid.Parse(userIdStr);
+        }
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)

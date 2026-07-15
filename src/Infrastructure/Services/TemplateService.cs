@@ -18,12 +18,12 @@ public class TemplateService : ITemplateService
         _logger = logger;
     }
 
-    public async Task<List<TemplateDto>> GetAllAsync(bool? isActive, CancellationToken cancellationToken = default)
+    public async Task<List<TemplateDto>> GetAllAsync(Guid companyId, bool isAdmin, bool? isActive, CancellationToken cancellationToken = default)
     {
         var query = _dbContext.Templates
             .AsNoTracking()
             .Include(t => t.CreatedBy)
-            .AsQueryable();
+            .Where(t => isAdmin || t.CompanyId == companyId);
 
         if (isActive.HasValue)
             query = query.Where(t => t.IsActive == isActive.Value);
@@ -45,13 +45,13 @@ public class TemplateService : ITemplateService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<TemplateDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<TemplateDetailDto?> GetByIdAsync(Guid id, Guid companyId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var template = await _dbContext.Templates
             .AsNoTracking()
             .Include(t => t.CreatedBy)
             .Include(t => t.Steps.OrderBy(s => s.SortOrder))
-            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == id && (isAdmin || t.CompanyId == companyId), cancellationToken);
 
         if (template is null)
             return null;
@@ -59,13 +59,14 @@ public class TemplateService : ITemplateService
         return MapToDetailDto(template);
     }
 
-    public async Task<TemplateDetailDto> CreateAsync(Guid createdById, CreateTemplateRequest request, CancellationToken cancellationToken = default)
+    public async Task<TemplateDetailDto> CreateAsync(Guid createdById, Guid companyId, CreateTemplateRequest request, CancellationToken cancellationToken = default)
     {
         var template = new Template
         {
             Id = Guid.NewGuid(),
             Name = request.Name,
             Description = request.Description,
+            CompanyId = companyId,
             CreatedById = createdById,
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
@@ -99,12 +100,12 @@ public class TemplateService : ITemplateService
         return MapToDetailDto(created);
     }
 
-    public async Task<TemplateDetailDto> UpdateAsync(Guid id, UpdateTemplateRequest request, CancellationToken cancellationToken = default)
+    public async Task<TemplateDetailDto> UpdateAsync(Guid id, Guid companyId, bool isAdmin, UpdateTemplateRequest request, CancellationToken cancellationToken = default)
     {
         var template = await _dbContext.Templates
             .Include(t => t.CreatedBy)
             .Include(t => t.Steps.OrderBy(s => s.SortOrder))
-            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == id && (isAdmin || t.CompanyId == companyId), cancellationToken);
 
         if (template is null)
             throw new KeyNotFoundException("Template not found.");
@@ -127,10 +128,10 @@ public class TemplateService : ITemplateService
         return MapToDetailDto(template);
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, Guid companyId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var template = await _dbContext.Templates
-            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == id && (isAdmin || t.CompanyId == companyId), cancellationToken);
 
         if (template is null)
             throw new KeyNotFoundException("Template not found.");
@@ -141,11 +142,11 @@ public class TemplateService : ITemplateService
         _logger.LogInformation("Template '{TemplateId}' permanently deleted", id);
     }
 
-    public async Task<TemplateStepDto> AddStepAsync(Guid templateId, CreateTemplateStepRequest request, CancellationToken cancellationToken = default)
+    public async Task<TemplateStepDto> AddStepAsync(Guid templateId, Guid companyId, bool isAdmin, CreateTemplateStepRequest request, CancellationToken cancellationToken = default)
     {
         var template = await _dbContext.Templates
             .Include(t => t.Steps)
-            .FirstOrDefaultAsync(t => t.Id == templateId, cancellationToken);
+            .FirstOrDefaultAsync(t => t.Id == templateId && (isAdmin || t.CompanyId == companyId), cancellationToken);
 
         if (template is null)
             throw new KeyNotFoundException("Template not found.");
@@ -172,8 +173,10 @@ public class TemplateService : ITemplateService
         return MapToStepDto(step);
     }
 
-    public async Task<TemplateStepDto> UpdateStepAsync(Guid templateId, Guid stepId, UpdateTemplateStepRequest request, CancellationToken cancellationToken = default)
+    public async Task<TemplateStepDto> UpdateStepAsync(Guid templateId, Guid stepId, Guid companyId, bool isAdmin, UpdateTemplateStepRequest request, CancellationToken cancellationToken = default)
     {
+        await EnsureTemplateInCompanyAsync(templateId, companyId, isAdmin, cancellationToken);
+
         var step = await _dbContext.TemplateSteps
             .FirstOrDefaultAsync(s => s.Id == stepId && s.TemplateId == templateId, cancellationToken);
 
@@ -196,8 +199,10 @@ public class TemplateService : ITemplateService
         return MapToStepDto(step);
     }
 
-    public async Task DeleteStepAsync(Guid templateId, Guid stepId, CancellationToken cancellationToken = default)
+    public async Task DeleteStepAsync(Guid templateId, Guid stepId, Guid companyId, bool isAdmin, CancellationToken cancellationToken = default)
     {
+        await EnsureTemplateInCompanyAsync(templateId, companyId, isAdmin, cancellationToken);
+
         var step = await _dbContext.TemplateSteps
             .FirstOrDefaultAsync(s => s.Id == stepId && s.TemplateId == templateId, cancellationToken);
 
@@ -225,8 +230,10 @@ public class TemplateService : ITemplateService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task ReorderStepsAsync(Guid templateId, ReorderStepsRequest request, CancellationToken cancellationToken = default)
+    public async Task ReorderStepsAsync(Guid templateId, Guid companyId, bool isAdmin, ReorderStepsRequest request, CancellationToken cancellationToken = default)
     {
+        await EnsureTemplateInCompanyAsync(templateId, companyId, isAdmin, cancellationToken);
+
         var steps = await _dbContext.TemplateSteps
             .Where(s => s.TemplateId == templateId)
             .ToListAsync(cancellationToken);
@@ -246,6 +253,15 @@ public class TemplateService : ITemplateService
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.UpdatedAt, DateTime.UtcNow), cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureTemplateInCompanyAsync(Guid templateId, Guid companyId, bool isAdmin, CancellationToken cancellationToken)
+    {
+        var exists = await _dbContext.Templates
+            .AnyAsync(t => t.Id == templateId && (isAdmin || t.CompanyId == companyId), cancellationToken);
+
+        if (!exists)
+            throw new KeyNotFoundException("Template not found.");
     }
 
     private static TemplateDetailDto MapToDetailDto(Template template) => new()

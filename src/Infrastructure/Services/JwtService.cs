@@ -33,7 +33,7 @@ public class JwtService
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim("companyId", user.CompanyId?.ToString() ?? ""),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim("role", user.Role.ToString()),
             new Claim("firstName", user.FirstName),
             new Claim("lastName", user.LastName),
         };

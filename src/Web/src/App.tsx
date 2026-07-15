@@ -67,7 +67,7 @@ function App() {
               <Route path="/tasks/:id" element={<TaskDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
-              <Route path="/template/:id" element={<TemplateViewPage/>} />
+              <Route path="/templates/:id" element={<TemplateViewPage />} />
               <Route
                 path="/templates/new"
                 element={

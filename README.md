@@ -1,8 +1,8 @@
-# Planify - Task & Process Management Application
+# Planify — Task & Process Management Application
 
 ## Overview
 
-Planify is a task and process management application built for companies that need to manage workflows with reusable templates, multi-assignee tasks, and real-time notifications. It supports both **on-premise** and **cloud** deployment. Each deployment serves a single company (single-tenant per instance).
+Planify is a task and process management application built for organizations that need to manage workflows with reusable templates, multi-assignee tasks, and real-time notifications. It is deployed **on-premise** as a single instance for one organization. A deployment can host **multiple companies**, and data is strictly isolated between them — users in one company can never see or modify another company's tasks, templates, or users. A system **Admin** oversees all companies.
 
 ---
 
@@ -24,18 +24,19 @@ Planify is a task and process management application built for companies that ne
 - Steps support rich text instructions (Tiptap editor) with image uploads
 - Drag-and-drop step reordering (@dnd-kit)
 - Templates can be activated/deactivated
-- All authenticated users can view templates; only Managers can create/edit/delete
+- Templates are **company-scoped**: a template belongs to the company of its creator and is only visible/editable within that company (Admins can see all)
+- All authenticated users in a company can view its templates; only Admins and Managers can create/edit/delete
 
 ### Task Management
 - Kanban board with 4 columns: To Do, In Progress, Done, Blocked
-- Create tasks from scratch or from a template (snapshot - steps copied, editable per task)
+- Create tasks from scratch or from a template (snapshot — steps copied, editable per task)
 - Multi-assignee support (many-to-many)
 - Enforced status transitions: ToDo ↔ InProgress ↔ Done, ToDo/InProgress ↔ Blocked
 - Step completion tracking with progress bar
 - Priority levels: Low, Medium, High, Critical
 - Due dates with overdue visual indicators
 - Filtering by status, priority, assignee, search, and overdue-only
-- Managers see all company tasks; Users see only tasks assigned to them
+- Admins see all tasks across companies; Managers see all tasks in their company; Users see only tasks assigned to them
 
 ### Comments & Attachments
 - Rich text comments with Tiptap editor (bold, italic, lists, images)
@@ -50,6 +51,17 @@ Planify is a task and process management application built for companies that ne
 - Full notifications page with load-more pagination
 - Mark as read, mark all as read, delete individual/all
 - Self-notifications filtered out (you don't get notified about your own actions)
+
+### Reliability & Error Handling
+- Global exception-handling middleware returns RFC 7807 `ProblemDetails` responses
+- Every unhandled error is tagged with a `traceId` (returned to the client and written to the logs) so a specific failure can be located quickly in the log files
+- Server errors (500) log the full exception but return a generic message — internal details are never leaked to clients; expected 4xx cases (validation, not-found, unauthorized) return a helpful message
+- Serilog structured logging to console and daily rolling files (`Logs/log-{date}.txt`)
+
+### Background Maintenance Jobs
+- **Refresh-token cleanup** — periodically removes expired/revoked refresh tokens
+- **Notification cleanup** — enforces retention so the notifications table doesn't grow unbounded
+- **Orphaned image cleanup** — removes uploaded editor images that are no longer referenced by any content
 
 ---
 
@@ -90,9 +102,6 @@ src/
 ├── Domain/           # Entities, enums
 ├── Infrastructure/   # EF Core data access, service implementations
 └── Web/              # React SPA (Vite + TypeScript + MUI)
-tests/
-├── API.IntegrationTests/    # Full HTTP integration tests
-└── Application.UnitTests/   # Service unit tests
 ```
 
 ---
@@ -165,15 +174,15 @@ Update `src/API/appsettings.Development.json`:
 ### Templates
 | Method | Endpoint | Access |
 |---|---|---|
-| GET | `/api/templates` | Authenticated |
-| GET | `/api/templates/{id}` | Authenticated |
-| POST | `/api/templates` | Manager |
-| PUT | `/api/templates/{id}` | Manager |
-| DELETE | `/api/templates/{id}` | Manager |
-| POST | `/api/templates/{id}/steps` | Manager |
-| PUT | `/api/templates/{id}/steps/{stepId}` | Manager |
-| DELETE | `/api/templates/{id}/steps/{stepId}` | Manager |
-| PUT | `/api/templates/{id}/steps/reorder` | Manager |
+| GET | `/api/templates` | Authenticated (company-scoped) |
+| GET | `/api/templates/{id}` | Authenticated (company-scoped) |
+| POST | `/api/templates` | Admin, Manager |
+| PUT | `/api/templates/{id}` | Admin, Manager |
+| DELETE | `/api/templates/{id}` | Admin, Manager |
+| POST | `/api/templates/{id}/steps` | Admin, Manager |
+| PUT | `/api/templates/{id}/steps/{stepId}` | Admin, Manager |
+| DELETE | `/api/templates/{id}/steps/{stepId}` | Admin, Manager |
+| PUT | `/api/templates/{id}/steps/reorder` | Admin, Manager |
 
 ### Tasks
 | Method | Endpoint | Access |
@@ -419,6 +428,7 @@ WantedBy=multi-user.target
 | Column | Type | Notes |
 |---|---|---|
 | Template.Id | UNIQUEIDENTIFIER (PK) | |
+| Template.CompanyId | UNIQUEIDENTIFIER (FK) | Owning company (tenant isolation) |
 | Template.Name | NVARCHAR(300) | |
 | Template.Description | NVARCHAR(MAX) | |
 | Template.CreatedById | UNIQUEIDENTIFIER (FK) | |
@@ -443,11 +453,12 @@ WantedBy=multi-user.target
 | IsRead | BIT | |
 
 ### Key Indexes
-- `User.Email` - unique
-- `TaskAssignees(TaskItemId, UserId)` - composite PK
-- `Task.Status`, `Task.DueDate` - for filtering/overdue queries
+- `User.Email` — unique
+- `Template.CompanyId` — for company-scoped template queries
+- `TaskAssignees(TaskItemId, UserId)` — composite PK
+- `Task.Status`, `Task.DueDate` — for filtering/overdue queries
 - `TaskStep.TaskId + SortOrder`, `TemplateStep.TemplateId + SortOrder`
-- `Notification(UserId, IsRead, CreatedAt)` - for efficient queries
+- `Notification(UserId, IsRead, CreatedAt)` — for efficient queries
 
 ---
 
@@ -455,14 +466,18 @@ WantedBy=multi-user.target
 
 | Area | Implementation |
 |---|---|
-| Passwords | BCrypt via ASP.NET Identity |
-| Tokens | Short-lived JWT (30 min) + httpOnly refresh cookie |
-| Authorization | Role-based on every endpoint; resource-level access checks |
+| Passwords | Hashed via ASP.NET Identity (PBKDF2), min length 8 with complexity rules |
+| Tokens | Short-lived JWT (30 min) + httpOnly refresh cookie; rotated on refresh, revoked on logout |
+| JWT secret | Validated at startup — app refuses to start if the secret is missing, too short (<32 chars), or still the placeholder |
+| Tenant isolation | Templates, tasks, and users are scoped to the caller's company; cross-company access is blocked at the query level (Admin is the only role that spans companies) |
+| Authorization | Role-based on every endpoint; resource-level access checks on tasks, comments, and attachments |
 | Input validation | FluentValidation on all request DTOs |
 | SQL injection | EF Core parameterized queries only |
-| XSS | React auto-escaping; files served as attachments |
-| File uploads | Size limit (25 MB), sanitized filenames, stored outside web root |
-| CORS | Explicit origin whitelist, no wildcards |
+| XSS | React auto-escaping on the client; server-side HTML sanitization (`HtmlSanitizer`) of rich-text content before storage |
+| File uploads | Size limits, extension allow-list, magic-byte signature check on images, sanitized filenames, path-traversal-safe storage outside the web root |
+| Error handling | Global middleware; generic 500 responses with a `traceId`, no stack traces or internal details leaked to clients |
+| Security headers | CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` on every response |
+| CORS | Explicit origin allow-list, no wildcards |
 | Rate limiting | Auth endpoints rate-limited (10 req/min per IP) |
 | HTTPS | Enforced in production with HSTS |
 | SignalR | JWT auth, users grouped by userId |
@@ -488,25 +503,24 @@ Logs are written to `Logs/log-{date}.txt` in the API directory.
 
 | Decision | Rationale |
 |---|---|
-| Monolith | One team, one deployment - microservices overkill for MVP |
+| Monolith | One team, one deployment — microservices overkill for this scope |
 | Clean Architecture (lightweight) | API → Application → Infrastructure. No full DDD/CQRS needed |
-| Single-tenant per deployment | Simplest on-prem model; no cross-tenant data leakage by design |
-| Stateless API (JWT) | No server-side sessions; cloud-migration friendly |
+| On-premise, single instance | Runs inside the organization's own network; no external dependencies |
+| Multiple companies per deployment | One organization can model several companies; data is isolated per company at the query level, with Admin as the cross-company super-user |
+| Stateless API (JWT) | No server-side sessions; horizontally scalable behind a load balancer |
 | Template snapshot on task creation | Steps copied and editable per task; template changes don't affect running tasks |
-| Local file storage with interface | `IFileStorageService` abstraction enables swap to Azure Blob/S3 later |
-| SignalR for notifications | Real-time in-app push; no email/SMS dependency for MVP |
+| Local file storage with interface | `IFileStorageService` abstraction keeps storage swappable and testable |
+| SignalR for notifications | Real-time in-app push; no email/SMS dependency |
 
 ---
 
 ## Future Roadmap (v2)
 
-1. **Audit log** - Track all changes with before/after values
-2. **Task dependencies** - "Task B cannot start until Task A is Done"
-3. **Recurring tasks** - Create tasks on a schedule from a template (Hangfire)
-4. **Reporting** - Completion rates, resolution time, overdue trends
-5. **Full-text search** - Across tasks, comments, templates
-6. **Activity feed** - Timeline of recent actions across the company
-7. **Email notifications** - Optional email delivery via SMTP/SendGrid
-8. **Notification cleanup** - 30-day retention background job
-9. **Docker containerization** - Dockerfile for simplified deployment
-10. **Cloud migration** - Swap file storage to Azure Blob, DB to Azure SQL (zero business logic changes)
+1. **Audit log** — Track all changes with before/after values
+2. **Task dependencies** — "Task B cannot start until Task A is Done"
+3. **Recurring tasks** — Create tasks on a schedule from a template (Hangfire)
+4. **Reporting** — Completion rates, resolution time, overdue trends
+5. **Full-text search** — Across tasks, comments, templates
+6. **Activity feed** — Timeline of recent actions across the company
+7. **Email notifications** — Optional email delivery via SMTP
+8. **Docker containerization** — Dockerfile for simplified on-premise deployment

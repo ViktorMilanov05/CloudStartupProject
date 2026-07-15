@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Application.DTOs.Tasks;
 using Application.Interfaces;
@@ -211,11 +212,10 @@ public class TasksController : ControllerBase
 
     private (Guid UserId, Guid CompanyId, string Role) GetCallerContext()
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        var userIdStr = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
             ?? throw new UnauthorizedAccessException("User ID claim not found.");
-        var companyIdStr = User.FindFirstValue("companyId")
-            ?? throw new UnauthorizedAccessException("Company ID claim not found.");
-        var role = User.FindFirstValue(ClaimTypes.Role)
+        var companyIdStr = User.FindFirstValue("companyId");
+        var role = User.FindFirstValue("role")
             ?? throw new UnauthorizedAccessException("Role claim not found.");
 
         var companyId = string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);

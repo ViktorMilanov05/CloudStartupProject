@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Application.DTOs.Templates;
 using Application.Interfaces;
@@ -38,14 +39,16 @@ public class TemplatesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool? isActive, CancellationToken cancellationToken)
     {
-        var templates = await _templateService.GetAllAsync(isActive, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        var templates = await _templateService.GetAllAsync(companyId, isAdmin, isActive, cancellationToken);
         return Ok(templates);
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var template = await _templateService.GetByIdAsync(id, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        var template = await _templateService.GetByIdAsync(id, companyId, isAdmin, cancellationToken);
         if (template is null)
             return NotFound();
 
@@ -61,7 +64,8 @@ public class TemplatesController : ControllerBase
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
 
         var userId = GetUserId();
-        var template = await _templateService.CreateAsync(userId, request, cancellationToken);
+        var (companyId, _) = GetCompanyContext();
+        var template = await _templateService.CreateAsync(userId, companyId, request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = template.Id }, template);
     }
 
@@ -73,7 +77,8 @@ public class TemplatesController : ControllerBase
         if (!validation.IsValid)
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
 
-        var template = await _templateService.UpdateAsync(id, request, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        var template = await _templateService.UpdateAsync(id, companyId, isAdmin, request, cancellationToken);
         return Ok(template);
     }
 
@@ -81,7 +86,8 @@ public class TemplatesController : ControllerBase
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        await _templateService.DeleteAsync(id, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        await _templateService.DeleteAsync(id, companyId, isAdmin, cancellationToken);
         return NoContent();
     }
 
@@ -93,7 +99,8 @@ public class TemplatesController : ControllerBase
         if (!validation.IsValid)
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
 
-        var step = await _templateService.AddStepAsync(id, request, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        var step = await _templateService.AddStepAsync(id, companyId, isAdmin, request, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id }, step);
     }
 
@@ -105,7 +112,8 @@ public class TemplatesController : ControllerBase
         if (!validation.IsValid)
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
 
-        var step = await _templateService.UpdateStepAsync(id, stepId, request, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        var step = await _templateService.UpdateStepAsync(id, stepId, companyId, isAdmin, request, cancellationToken);
         return Ok(step);
     }
 
@@ -113,7 +121,8 @@ public class TemplatesController : ControllerBase
     [Authorize(Roles = "Admin,Manager")]
     public async Task<IActionResult> DeleteStep(Guid id, Guid stepId, CancellationToken cancellationToken)
     {
-        await _templateService.DeleteStepAsync(id, stepId, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        await _templateService.DeleteStepAsync(id, stepId, companyId, isAdmin, cancellationToken);
         return NoContent();
     }
 
@@ -125,14 +134,23 @@ public class TemplatesController : ControllerBase
         if (!validation.IsValid)
             return BadRequest(new { errors = validation.Errors.Select(e => e.ErrorMessage) });
 
-        await _templateService.ReorderStepsAsync(id, request, cancellationToken);
+        var (companyId, isAdmin) = GetCompanyContext();
+        await _templateService.ReorderStepsAsync(id, companyId, isAdmin, request, cancellationToken);
         return NoContent();
     }
 
     private Guid GetUserId()
     {
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        var sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
             ?? throw new UnauthorizedAccessException("User ID claim not found.");
         return Guid.Parse(sub);
+    }
+
+    private (Guid CompanyId, bool IsAdmin) GetCompanyContext()
+    {
+        var companyIdStr = User.FindFirstValue("companyId");
+        var companyId = string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);
+        var isAdmin = string.Equals(User.FindFirstValue("role"), "Admin", StringComparison.OrdinalIgnoreCase);
+        return (companyId, isAdmin);
     }
 }

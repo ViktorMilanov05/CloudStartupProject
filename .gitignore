@@ -85,3 +85,6 @@ Desktop.ini
 
 # Uploads
 Uploads/
+
+# Local agent/tooling config
+.claude/

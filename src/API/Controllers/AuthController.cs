@@ -52,13 +52,21 @@ public class AuthController : ControllerBase
         var refreshToken = Request.Cookies["refreshToken"];
         if (string.IsNullOrEmpty(refreshToken))
         {
-            return Unauthorized(new { message = "Refresh token not found." });
+            return Unauthorized(new { detail = "Refresh token not found." });
         }
 
-        var result = await _authService.RefreshTokenAsync(refreshToken, cancellationToken);
-        SetRefreshTokenCookie(result.RefreshToken);
-
-        return Ok(result);
+        try
+        {
+            var result = await _authService.RefreshTokenAsync(refreshToken, cancellationToken);
+            SetRefreshTokenCookie(result.RefreshToken);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Clear the invalid cookie so the client stops retrying with a stale token.
+            Response.Cookies.Delete("refreshToken");
+            return Unauthorized(new { detail = ex.Message });
+        }
     }
 
     [HttpPost("logout")]

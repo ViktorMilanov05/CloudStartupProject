@@ -39,6 +39,8 @@ public class CompanyService : ICompanyService
 
     public async Task<CompanyDto> CreateAsync(CreateCompanyRequest request, CancellationToken cancellationToken = default)
     {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
         var company = new Company
         {
             Id = Guid.NewGuid(),
@@ -66,11 +68,12 @@ public class CompanyService : ICompanyService
         var result = await _userManager.CreateAsync(manager, request.ManagerPassword);
         if (!result.Succeeded)
         {
-            _dbContext.Companies.Remove(company);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.RollbackAsync(cancellationToken);
             var errors = string.Join(", ", result.Errors.Select(e => e.Description));
             throw new InvalidOperationException($"Manager creation failed: {errors}");
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         _logger.LogInformation("Company '{CompanyName}' created with manager {Email}", company.Name, manager.Email);
 

@@ -20,6 +20,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
+
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../../api/tasks';
 import { templatesApi } from '../../api/templates';
@@ -215,7 +216,7 @@ export default function TaskCreateDialog({ open, onClose, onCreated }: TaskCreat
                 multiple
                 value={assigneeIds}
                 label="Assignees"
-                onChange={(e) => setAssigneeIds(e.target.value as string[])} 
+                onChange={(e) => setAssigneeIds(e.target.value as string[])}
                 renderValue={(selected) => {
                   const names = (users ?? []).filter(u => selected.includes(u.id)).map(u => `${u.firstName} ${u.lastName}`);
                   return names.join(', ');

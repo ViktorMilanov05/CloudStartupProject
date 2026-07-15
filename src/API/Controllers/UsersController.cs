@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Application.DTOs.Users;
 using Application.Interfaces;
@@ -88,15 +89,14 @@ public class UsersController : ControllerBase
 
     private Guid GetUserId()
     {
-        var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        var sub = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
             ?? throw new UnauthorizedAccessException("User ID claim not found.");
         return Guid.Parse(sub);
     }
 
     private Guid GetCompanyId()
     {
-        var companyId = User.FindFirstValue("companyId")
-            ?? throw new UnauthorizedAccessException("Company ID claim not found.");
-        return Guid.Parse(companyId);
+        var companyIdStr = User.FindFirstValue("companyId");
+        return string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);
     }
 }

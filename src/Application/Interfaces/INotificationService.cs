@@ -14,6 +14,12 @@ public interface INotificationService
     Task DeleteAllAsync(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Deletes all notifications older than the given number of days (system-wide).
+    /// Returns the number of notifications removed.
+    /// </summary>
+    Task<int> DeleteOlderThanAsync(int days, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Creates notifications for the given recipients and pushes them via SignalR.
     /// </summary>
     Task NotifyAsync(

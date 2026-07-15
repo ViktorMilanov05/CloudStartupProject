@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -42,8 +43,16 @@ public class FilesController : ControllerBase
         if (!AllowedImageExtensions.Contains(extension))
             return BadRequest(new { error = "Only image files (jpg, png, gif, webp) are allowed." });
 
-        using var stream = file.OpenReadStream();
-        var (storedPath, storedFileName) = await _fileStorageService.SaveImageAsync(file.FileName, stream, cancellationToken);
+        // Read into memory so the file signature can be validated before persisting.
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream, cancellationToken);
+        memoryStream.Position = 0;
+
+        if (!HasValidImageSignature(memoryStream, extension))
+            return BadRequest(new { error = "File content does not match a valid image." });
+
+        memoryStream.Position = 0;
+        var (storedPath, storedFileName) = await _fileStorageService.SaveImageAsync(file.FileName, memoryStream, cancellationToken);
 
         var imageUrl = $"{Request.Scheme}://{Request.Host}/api/files/images/{storedFileName}";
 
@@ -60,17 +69,16 @@ public class FilesController : ControllerBase
 
         try
         {
-            var basePath = Path.Combine(
-                Directory.GetCurrentDirectory(),
-                "Uploads",
-                "images",
-                sanitizedFileName);
-
-            var stream = await _fileStorageService.GetFileAsync(basePath, cancellationToken);
+            var relativePath = Path.Combine("images", sanitizedFileName);
+            var stream = await _fileStorageService.GetFileAsync(relativePath, cancellationToken);
             var contentType = GetContentType(sanitizedFileName);
             return File(stream, contentType);
         }
         catch (FileNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (UnauthorizedAccessException)
         {
             return NotFound();
         }
@@ -86,6 +94,29 @@ public class FilesController : ControllerBase
             ".gif" => "image/gif",
             ".webp" => "image/webp",
             _ => "application/octet-stream"
+        };
+    }
+
+    /// <summary>
+    /// Verifies the leading bytes of the uploaded stream match the expected image
+    /// format for the given extension, preventing disguised non-image uploads.
+    /// </summary>
+    private static bool HasValidImageSignature(Stream stream, string extension)
+    {
+        Span<byte> header = stackalloc byte[12];
+        var read = stream.Read(header);
+        if (read < 12)
+            return false;
+
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF,
+            ".png" => header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47
+                      && header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A,
+            ".gif" => header[0] == 0x47 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x38,
+            ".webp" => header[0] == 0x52 && header[1] == 0x49 && header[2] == 0x46 && header[3] == 0x46
+                       && header[8] == 0x57 && header[9] == 0x45 && header[10] == 0x42 && header[11] == 0x50,
+            _ => false
         };
     }
 
@@ -139,11 +170,10 @@ public class FilesController : ControllerBase
 
     private (Guid UserId, Guid CompanyId, string Role) GetCallerContext()
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
+        var userIdStr = User.FindFirstValue(JwtRegisteredClaimNames.Sub)
             ?? throw new UnauthorizedAccessException("User ID claim not found.");
-        var companyIdStr = User.FindFirstValue("companyId")
-            ?? throw new UnauthorizedAccessException("Company ID claim not found.");
-        var role = User.FindFirstValue(ClaimTypes.Role)
+        var companyIdStr = User.FindFirstValue("companyId");
+        var role = User.FindFirstValue("role")
             ?? throw new UnauthorizedAccessException("Role claim not found.");
 
         var companyId = string.IsNullOrEmpty(companyIdStr) ? Guid.Empty : Guid.Parse(companyIdStr);

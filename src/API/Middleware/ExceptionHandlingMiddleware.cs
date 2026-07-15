@@ -23,15 +23,12 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unhandled exception occurred");
             await HandleExceptionAsync(context, ex);
         }
     }
 
-    private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        context.Response.ContentType = "application/problem+json";
-
         var (statusCode, title) = exception switch
         {
             ArgumentException => (HttpStatusCode.BadRequest, "Bad Request"),
@@ -42,17 +39,43 @@ public class ExceptionHandlingMiddleware
             _ => (HttpStatusCode.InternalServerError, "Internal Server Error")
         };
 
+        var traceId = context.TraceIdentifier;
+
+        // Unexpected (500) errors are logged at Error with the full exception so support
+        // can correlate the client-facing traceId to the exact server-side failure.
+        // Expected (4xx) errors are logged at Warning to avoid noise but still traceable.
+        if (statusCode == HttpStatusCode.InternalServerError)
+        {
+            _logger.LogError(exception,
+                "Unhandled exception. TraceId: {TraceId}, Method: {Method}, Path: {Path}",
+                traceId, context.Request.Method, context.Request.Path);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Request failed with {StatusCode} ({Title}): {Message}. TraceId: {TraceId}, Method: {Method}, Path: {Path}",
+                (int)statusCode, title, exception.Message, traceId, context.Request.Method, context.Request.Path);
+        }
+
+        // If the response has already started, we cannot safely rewrite it.
+        if (context.Response.HasStarted)
+            return;
+
+        context.Response.Clear();
+        context.Response.ContentType = "application/problem+json";
         context.Response.StatusCode = (int)statusCode;
 
         var problemDetails = new ProblemDetails
         {
             Status = (int)statusCode,
             Title = title,
+            // Never leak internal exception detail on 500s; expected errors carry a safe message.
             Detail = statusCode == HttpStatusCode.InternalServerError
-                ? "An unexpected error occurred. Please try again later."
+                ? "An unexpected error occurred. Please reference the traceId when contacting support."
                 : exception.Message,
             Instance = context.Request.Path
         };
+        problemDetails.Extensions["traceId"] = traceId;
 
         var json = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions
         {

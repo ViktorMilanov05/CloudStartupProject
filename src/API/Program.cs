@@ -16,11 +16,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using Serilog;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,7 +53,16 @@ builder.Services.AddIdentity<User, IdentityRole<Guid>>(options =>
 
 // ── JWT Authentication ───────────────────────────────────────────────────────
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
+var jwtSecret = jwtSettings["Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret)
+    || jwtSecret.Length < 32
+    || jwtSecret.Contains("CHANGE-THIS", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "Configuration error: 'Jwt:Secret' is missing, shorter than 32 characters, or still set to the " +
+        "placeholder value. Set a strong, unique secret (e.g. `openssl rand -base64 32`) before starting the application.");
+}
+var key = Encoding.UTF8.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(options =>
     {
@@ -72,8 +81,8 @@ builder.Services.AddAuthentication(options =>
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(key),
             ClockSkew = TimeSpan.Zero,
-            NameClaimType = ClaimTypes.NameIdentifier,
-            RoleClaimType = ClaimTypes.Role
+            NameClaimType = JwtRegisteredClaimNames.Sub,
+            RoleClaimType = "role"
         };
 
         // Allow JWT token from query string for SignalR
@@ -114,6 +123,7 @@ builder.Services.AddScoped<JwtService>();
 // ── Background Cleanup Services ──────────────────────────────────────────────
 builder.Services.AddHostedService<TokenCleanupService>();
 builder.Services.AddHostedService<NotificationCleanupService>();
+builder.Services.AddHostedService<OrphanedImageCleanupService>();
 
 // ── FluentValidation ─────────────────────────────────────────────────────────
 builder.Services.AddValidatorsFromAssemblyContaining<MappingProfile>();
@@ -191,7 +201,7 @@ builder.Services.AddOpenApi(options =>
         };
 
         // Apply globally to all operations
-        foreach (var operation in document.Paths.Values.SelectMany(path => path.Operations))
+        foreach (var operation in document.Paths.Values.SelectMany(path => path.Operations ?? []))
         {
             operation.Value.Security ??= [];
             operation.Value.Security.Add(new OpenApiSecurityRequirement
@@ -206,22 +216,25 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
-// Auto-migrate database on startup
+// ── Auto-migrate database on startup (with distributed lock for multi-instance) ─
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var dbCreator = db.Database.GetService<IRelationalDatabaseCreator>();
-    if(!await dbCreator.ExistsAsync())
+    var dbCreator = db.GetService<IRelationalDatabaseCreator>();
+    if (!await dbCreator.ExistsAsync())
     {
         await dbCreator.CreateAsync();
+        Log.Information("Database created.");
     }
+
+    // Use a separate connection with a transaction for the distributed lock
     var connectionString = db.Database.GetConnectionString();
     await using var lockConnection = new Microsoft.Data.SqlClient.SqlConnection(connectionString);
     await lockConnection.OpenAsync();
     await using var transaction = lockConnection.BeginTransaction();
     await using var lockCommand = lockConnection.CreateCommand();
-    lockCommand.CommandText = "EXEC @result = sp_getapplock @Resource = 'DbMigration', @LockMode = 'Exclusive', @LockTimeout = 60000; SELECT @result;";
     lockCommand.Transaction = transaction;
+    lockCommand.CommandText = "EXEC @result = sp_getapplock @Resource = 'DbMigration', @LockMode = 'Exclusive', @LockTimeout = 60000; SELECT @result;";
     var resultParam = lockCommand.CreateParameter();
     resultParam.ParameterName = "@result";
     resultParam.DbType = System.Data.DbType.Int32;
@@ -230,13 +243,16 @@ using (var scope = app.Services.CreateScope())
     var lockResult = (int)(await lockCommand.ExecuteScalarAsync())!;
     if (lockResult >= 0)
     {
+        Log.Information("Acquired migration lock. Applying pending migrations...");
         db.Database.Migrate();
-        Log.Information("Database migration completed successfully.");
+        Log.Information("Database migrations applied successfully.");
         transaction.Commit();
     }
     else
     {
-        Log.Warning("Could not acquire lock for database migration. Another instance may be migrating the database. Lock result: {LockResult}", lockResult);
+        Log.Warning("Could not acquire migration lock (result: {Result}). Another instance is handling migration.", lockResult);
+        // Wait briefly for the other instance to finish, then continue
+        await Task.Delay(TimeSpan.FromSeconds(30));
     }
 }
 

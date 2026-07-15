@@ -22,6 +22,13 @@ public class TemplateConfiguration : IEntityTypeConfiguration<Template>
         builder.Property(t => t.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
         builder.Property(t => t.UpdatedAt).HasDefaultValueSql("GETUTCDATE()");
 
+        builder.HasOne(t => t.Company)
+            .WithMany()
+            .HasForeignKey(t => t.CompanyId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(t => t.CompanyId);
+
         builder.HasOne(t => t.CreatedBy)
             .WithMany()
             .HasForeignKey(t => t.CreatedById)
